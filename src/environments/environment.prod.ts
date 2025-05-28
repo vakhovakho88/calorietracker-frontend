@@ -1,4 +1,4 @@
 export const environment = {
   production: true,
-  apiUrl: 'https://calorietracker-backend.onrender.com/api/v1'
+  apiUrl: 'https://calorietracker-backend.onrender.com/api/'
 };
