@@ -3,6 +3,7 @@ import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Observable, throwError, of } from 'rxjs';
 import { catchError, tap, map } from 'rxjs/operators';
 import { DailyLog, GoalSettings } from '../models/calorie-data.model';
+import { environment } from '../../environments/environment';
 
 /**
  * ApiService - Handles all HTTP communication with the backend
@@ -16,8 +17,8 @@ import { DailyLog, GoalSettings } from '../models/calorie-data.model';
   providedIn: 'root'
 })
 export class ApiService {
-  // Base URL for all API endpoints
-  private apiUrl = 'http://localhost:5052/api';
+  // Base URL for all API endpoints - uses environment configuration
+  private apiUrl = environment.apiUrl;
   
   // Track the last error message for the UI
   private lastErrorMessage: string | null = null;
