@@ -1,6 +1,8 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormBuilder, FormGroup, Validators, ReactiveFormsModule, ValidatorFn, AbstractControl } from '@angular/forms';
+import { Subject } from 'rxjs';
+import { takeUntil } from 'rxjs/operators';
 import { CalorieTrackingService } from '../../services/calorie-tracking.service';
 import { DailyLog, GoalSettings } from '../../models/calorie-data.model';
 
@@ -19,7 +21,7 @@ import { DailyLog, GoalSettings } from '../../models/calorie-data.model';
   templateUrl: './daily-log.component.html',
   styleUrls: ['./daily-log.component.scss']
 })
-export class DailyLogComponent implements OnInit {
+export class DailyLogComponent implements OnInit, OnDestroy {
   // Form for adding daily logs
   logForm: FormGroup;
   
@@ -40,6 +42,9 @@ export class DailyLogComponent implements OnInit {
   allowFutureDates: boolean = true; // Set to false if future dates should be blocked
   loading: boolean = false; // For loading indicator
 
+  // For cleanup of subscriptions
+  private destroy$ = new Subject<void>();
+
   constructor(
     private fb: FormBuilder,
     private calorieService: CalorieTrackingService
@@ -58,18 +63,19 @@ export class DailyLogComponent implements OnInit {
         Validators.pattern(/^\d+$/) // Only positive integers
       ]]
     });
-  }
-  ngOnInit(): void {
-    // Load existing logs for duplicate date validation
-    this.calorieService.getDailyLogs().subscribe({
-      next: (logs) => {
-        this.dailyLogs = Array.isArray(logs) ? logs : [];
-      },
-      error: (error) => {
-        console.error('Error loading daily logs:', error);
-        this.dailyLogs = []; // Ensure it's always an array
-      }
-    });
+  }  ngOnInit(): void {
+    // Subscribe to daily logs for duplicate date validation
+    this.calorieService.dailyLogs$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (logs) => {
+          this.dailyLogs = Array.isArray(logs) ? logs : [];
+        },
+        error: (error) => {
+          console.error('Error loading daily logs:', error);
+          this.dailyLogs = []; // Ensure it's always an array
+        }
+      });
 
     // Load goal settings for date window validation
     this.calorieService.getGoalSettings().subscribe(settings => {
@@ -86,6 +92,12 @@ export class DailyLogComponent implements OnInit {
       // Apply the updated validators
       this.logForm.get('date')?.updateValueAndValidity();
     });
+  }
+
+  ngOnDestroy(): void {
+    // Clean up subscriptions
+    this.destroy$.next();
+    this.destroy$.complete();
   }
 
   /**
@@ -108,10 +120,12 @@ export class DailyLogComponent implements OnInit {
         }, 3000);
         return;
       }
-      
-      // Get and validate the input values
+        // Get and validate the input values
       const caloriesBurned = parseInt(formValue.caloriesBurned, 10);
       const caloriesConsumed = parseInt(formValue.caloriesConsumed, 10);
+      
+      console.log('Form values:', formValue);
+      console.log('Parsed values - caloriesBurned:', caloriesBurned, 'caloriesConsumed:', caloriesConsumed);
       
       // Additional validation using service method
       const validation = this.calorieService.validateDailyLogInput({
@@ -134,16 +148,14 @@ export class DailyLogComponent implements OnInit {
         caloriesConsumed
       };
       
-      // Try to add the log
+      console.log('DailyLogComponent - Creating new log:', newLog);
+        // Try to add the log
       this.calorieService.addDailyLog(newLog).subscribe({
         next: (addedLog) => {
           // Hide loading indicator
           this.loading = false;
           
-          // Update local dailyLogs array to include the new log
-          this.dailyLogs = [...this.dailyLogs, addedLog];
-          
-          // Show success message
+          // Show success message (no need to manually update dailyLogs, service handles it)
           this.successMessage = `Successfully added entry for ${this.formatDisplayDate(selectedDate)}`;
           this.showSuccessMessage = true;
           this.showErrorMessage = false;

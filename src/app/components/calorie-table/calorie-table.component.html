@@ -54,13 +54,13 @@
   
   <ng-template #noEntries>
     <div class="no-data">No entries yet. Add your first calorie log above.</div>
-  </ng-template>
-  <!-- Status Box -->
+  </ng-template>  <!-- Status Box -->
   <div class="status-box" data-testid="status-box" [ngClass]="getOverallStatusClass()">
     <h3>Goal Progress</h3>
     <p data-testid="status-message">Status: {{ getOverallStatusMessage() }}</p>
-    <p>{{ dailyLogs.length }} of {{ goalSettings?.timeWindowDays || 0 }} days logged</p>
-    <p data-testid="goal-percentage">Progress: {{ calculateOverallPercentage() }}%</p>
+    <p data-testid="progress-details">{{ getProgressDetails() }}</p>
+    <p>{{ getDaysLoggedInfo() }}</p>
+    <p data-testid="goal-percentage">Progress: {{ calculateOverallPercentage() | number:'1.1-1' }}%</p>
   </div>
 </div>
 
@@ -197,11 +197,47 @@
     border-radius: 4px;
     margin-bottom: 15px;
   }
-  
-  .status-box {
+    .status-box {
     margin-top: 20px;
     padding: 15px;
     border-radius: 4px;
+  }
+  
+  .status-excellent {
+    background-color: rgba(46, 204, 113, 0.2);
+    border: 1px solid #2ecc71;
+    color: #2ecc71;
+  }
+  
+  .status-good {
+    background-color: rgba(52, 152, 219, 0.2);
+    border: 1px solid #3498db;
+    color: #3498db;
+  }
+  
+  .status-warning {
+    background-color: rgba(241, 196, 15, 0.2);
+    border: 1px solid #f1c40f;
+    color: #d68910;
+  }
+  
+  .status-behind {
+    background-color: rgba(231, 76, 60, 0.2);
+    border: 1px solid #e74c3c;
+    color: #e74c3c;
+  }
+  
+  .status-negative {
+    background-color: rgba(155, 89, 182, 0.2);
+    border: 2px solid #9b59b6;
+    color: #9b59b6;
+    font-weight: bold;
+  }
+  
+  .no-data {
+    background-color: rgba(149, 165, 166, 0.2);
+    border: 1px solid #95a5a6;
+    color: #95a5a6;
   }
   
   .green {

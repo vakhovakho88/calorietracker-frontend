@@ -29,11 +29,22 @@ export class ApiService {
   /**
    * Get all daily logs
    * @returns Observable of DailyLog array
-   */  
-  getDailyLogs(): Observable<DailyLog[]> {
-    return this.http.get<{items: DailyLog[], totalCount: number, pageNumber: number, pageSize: number, totalPages: number, hasPrevious: boolean, hasNext: boolean}>(`${this.apiUrl}/v1/dailylogs`)
+   */  getDailyLogs(): Observable<DailyLog[]> {
+    return this.http.get<{items: any[], totalCount: number, pageNumber: number, pageSize: number, totalPages: number, hasPrevious: boolean, hasNext: boolean}>(`${this.apiUrl}/dailylogs`)
       .pipe(
-        map(response => response.items), // Extract the items array from paginated response
+        map(response => response.items.map(item => ({
+          id: item.dailyLogId,
+          date: new Date(item.date),
+          dayNumber: item.dayNum,
+          caloriesBurned: item.kcalsBurn,
+          caloriesConsumed: item.kcalsIntake,
+          dailyDifference: item.kcalsDiff,
+          runningSum: item.sumDiffs,
+          remainingToGoal: item.goalDelta,
+          rollingAvg4Day: item.avg4Days,
+          rollingAvg7Day: item.avg7Days,
+          overallAverage: item.avgAll
+        } as DailyLog))),
         tap(logs => console.log(`Fetched ${logs.length} daily logs`)),
         catchError(this.handleError<DailyLog[]>('getDailyLogs', []))
       );
@@ -44,20 +55,54 @@ export class ApiService {
    * @param id The ID of the daily log to fetch
    * @returns Observable of DailyLog
    */  getDailyLog(id: number): Observable<DailyLog> {
-    return this.http.get<DailyLog>(`${this.apiUrl}/v1/dailylogs/${id}`)
+    return this.http.get<any>(`${this.apiUrl}/dailylogs/${id}`)
       .pipe(
+        map(response => ({
+          id: response.dailyLogId,
+          date: new Date(response.date),
+          dayNumber: response.dayNum,
+          caloriesBurned: response.kcalsBurn,
+          caloriesConsumed: response.kcalsIntake,
+          dailyDifference: response.kcalsDiff,
+          runningSum: response.sumDiffs,
+          remainingToGoal: response.goalDelta,
+          rollingAvg4Day: response.avg4Days,
+          rollingAvg7Day: response.avg7Days,
+          overallAverage: response.avgAll
+        } as DailyLog)),
         tap(_ => console.log(`Fetched daily log id=${id}`)),
         catchError(this.handleError<DailyLog>(`getDailyLog id=${id}`))
       );
   }
-
   /**
    * Add a new daily log
    * @param log The daily log data to add
    * @returns Observable of the created DailyLog
    */  addDailyLog(log: Partial<DailyLog>): Observable<DailyLog> {
-    return this.http.post<DailyLog>(`${this.apiUrl}/v1/dailylogs`, log)
+    console.log('ApiService.addDailyLog - Input log:', log);
+    
+    // Transform frontend model to backend DTO format
+    const createDto = {
+      Date: log.date ? log.date.toISOString() : new Date().toISOString(),
+      KcalsBurn: log.caloriesBurned || 0,
+      KcalsIntake: log.caloriesConsumed || 0
+    };
+    
+    console.log('ApiService.addDailyLog - Sending DTO:', createDto);    return this.http.post<any>(`${this.apiUrl}/dailylogs`, createDto)
       .pipe(
+        map(response => ({
+          id: response.dailyLogId,
+          date: new Date(response.date),
+          dayNumber: response.dayNum,
+          caloriesBurned: response.kcalsBurn,
+          caloriesConsumed: response.kcalsIntake,
+          dailyDifference: response.kcalsDiff,
+          runningSum: response.sumDiffs,
+          remainingToGoal: response.goalDelta,
+          rollingAvg4Day: response.avg4Days,
+          rollingAvg7Day: response.avg7Days,
+          overallAverage: response.avgAll
+        } as DailyLog)),
         tap((newLog: DailyLog) => console.log(`Added daily log w/ id=${newLog.id}`)),
         catchError(this.handleError<DailyLog>('addDailyLog'))
       );
@@ -68,8 +113,28 @@ export class ApiService {
    * @param log The daily log data to update
    * @returns Observable of the updated DailyLog
    */  updateDailyLog(log: DailyLog): Observable<DailyLog> {
-    return this.http.put<DailyLog>(`${this.apiUrl}/v1/dailylogs/${log.id}`, log)
+    // Transform frontend model to backend DTO format
+    const updateDto = {
+      Date: log.date.toISOString(),
+      KcalsBurn: log.caloriesBurned,
+      KcalsIntake: log.caloriesConsumed
+    };
+
+    return this.http.put<any>(`${this.apiUrl}/dailylogs/${log.id}`, updateDto)
       .pipe(
+        map(response => ({
+          id: response.dailyLogId,
+          date: new Date(response.date),
+          dayNumber: response.dayNum,
+          caloriesBurned: response.kcalsBurn,
+          caloriesConsumed: response.kcalsIntake,
+          dailyDifference: response.kcalsDiff,
+          runningSum: response.sumDiffs,
+          remainingToGoal: response.goalDelta,
+          rollingAvg4Day: response.avg4Days,
+          rollingAvg7Day: response.avg7Days,
+          overallAverage: response.avgAll
+        } as DailyLog)),
         tap(_ => console.log(`Updated daily log id=${log.id}`)),
         catchError(this.handleError<DailyLog>('updateDailyLog'))
       );
@@ -80,7 +145,7 @@ export class ApiService {
    * @param id The ID of the daily log to delete
    * @returns Observable with success status
    */  deleteDailyLog(id: number): Observable<void> {
-    return this.http.delete<void>(`${this.apiUrl}/v1/dailylogs/${id}`)
+    return this.http.delete<void>(`${this.apiUrl}/dailylogs/${id}`)
       .pipe(
         tap(_ => console.log(`Deleted daily log id=${id}`)),
         catchError(this.handleError<void>('deleteDailyLog'))
@@ -91,7 +156,7 @@ export class ApiService {
    * Delete all daily logs
    * @returns Observable with success status
    */  deleteAllDailyLogs(): Observable<void> {
-    return this.http.delete<void>(`${this.apiUrl}/v1/dailylogs/all`)
+    return this.http.delete<void>(`${this.apiUrl}/dailylogs/all`)
       .pipe(
         tap(_ => console.log('Deleted all daily logs')),
         catchError(this.handleError<void>('deleteAllDailyLogs'))
@@ -103,7 +168,7 @@ export class ApiService {
    * @returns Observable of GoalSettings
    */
   getGoalSettings(): Observable<GoalSettings> {
-    return this.http.get<{goalId: string, targetKcals: number, timeWindowDays: number, startDate: string}>(`${this.apiUrl}/v1/goals/active`)
+    return this.http.get<{goalId: string, targetKcals: number, timeWindowDays: number, startDate: string}>(`${this.apiUrl}/goals/active`)
       .pipe(
         map(response => ({
           goalId: response.goalId,
@@ -129,7 +194,7 @@ export class ApiService {
       startDate: settings.startDate.toISOString().split('T')[0] // Convert to YYYY-MM-DD format
     };    if (settings.goalId) {
       // Update existing goal
-      return this.http.put<{goalId: string, targetKcals: number, timeWindowDays: number, startDate: string}>(`${this.apiUrl}/v1/goals/${settings.goalId}`, goalData)
+      return this.http.put<{goalId: string, targetKcals: number, timeWindowDays: number, startDate: string}>(`${this.apiUrl}/goals/${settings.goalId}`, goalData)
         .pipe(
           map(response => ({
             goalId: response.goalId,
@@ -142,7 +207,7 @@ export class ApiService {
         );
     } else {
       // Create new goal
-      return this.http.post<{goalId: string, targetKcals: number, timeWindowDays: number, startDate: string}>(`${this.apiUrl}/v1/goals`, goalData)
+      return this.http.post<{goalId: string, targetKcals: number, timeWindowDays: number, startDate: string}>(`${this.apiUrl}/goals`, goalData)
         .pipe(
           map(response => ({
             goalId: response.goalId,
@@ -161,7 +226,7 @@ export class ApiService {
    * @param goalId The ID of the goal to undo
    * @returns Observable with success status
    */  undoGoalChange(goalId: string): Observable<void> {
-    return this.http.post<void>(`${this.apiUrl}/v1/goals/${goalId}/undo`, {})
+    return this.http.post<void>(`${this.apiUrl}/goals/${goalId}/undo`, {})
       .pipe(
         tap(_ => console.log(`Undid goal change id=${goalId}`)),
         catchError(this.handleError<void>('undoGoalChange'))

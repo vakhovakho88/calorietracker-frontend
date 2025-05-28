@@ -32,13 +32,19 @@ export class CalorieTrackingService {
     // Initialize data on service creation
     this.refreshData();
   }
-
   /**
    * Refresh all data from the API
    */
   refreshData(): void {
-    this.fetchGoalSettings();
-    this.fetchDailyLogs();
+    console.log('CalorieTrackingService: Refreshing all data from API');
+    this.fetchGoalSettings().subscribe({
+      next: (settings) => console.log('Goal settings refreshed successfully'),
+      error: (error) => console.error('Failed to refresh goal settings:', error)
+    });
+    this.fetchDailyLogs().subscribe({
+      next: (logs) => console.log('Daily logs refreshed successfully, count:', logs.length),
+      error: (error) => console.error('Failed to refresh daily logs:', error)
+    });
   }
 
   // ========== DAILY LOG METHODS ==========
@@ -57,7 +63,6 @@ export class CalorieTrackingService {
     // Otherwise fetch from API
     return this.fetchDailyLogs();
   }
-
   /**
    * Fetch fresh daily logs from API
    * @returns Observable of DailyLog array
@@ -71,7 +76,10 @@ export class CalorieTrackingService {
         this.dailyLogsSubject.next(processedLogs);
       }),
       catchError(error => {
+        console.error('Error fetching daily logs:', error);
         this.handleError('Failed to load daily logs');
+        // Update state with empty array so components are notified
+        this.dailyLogsSubject.next([]);
         return of([]);
       })
     );
@@ -175,20 +183,19 @@ export class CalorieTrackingService {
     // Otherwise fetch from API
     return this.fetchGoalSettings();
   }
-
   /**
    * Fetch fresh goal settings from API
    * @returns Observable of GoalSettings
-   */  fetchGoalSettings(): Observable<GoalSettings> {
+   */  
+  fetchGoalSettings(): Observable<GoalSettings> {
     return this.apiService.getGoalSettings().pipe(
       tap(settings => {
+        console.log('Fetched goal settings:', settings);
         // Update state
         this.goalSettingsSubject.next(settings);
-        
-        // Refresh logs to update calculations based on new goal
-        this.fetchDailyLogs();
       }),
       catchError(error => {
+        console.error('Error fetching goal settings:', error);
         this.handleError('Failed to load goal settings');
         const fallbackSettings: GoalSettings = {
           totalCalorieGoal: 3500,

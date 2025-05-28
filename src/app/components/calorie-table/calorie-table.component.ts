@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy } from '@angular/core';
+import { Component, OnInit, OnDestroy, ViewEncapsulation } from '@angular/core';
 import { CommonModule, DatePipe } from '@angular/common';
 import { ReactiveFormsModule, FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { Subject } from 'rxjs';
@@ -20,7 +20,8 @@ import { CalorieTrackingService } from '../../services/calorie-tracking.service'
   standalone: true,
   imports: [CommonModule, ReactiveFormsModule],
   templateUrl: './calorie-table.component.html',
-  styleUrls: ['./calorie-table.component.scss']
+  styleUrls: ['./calorie-table.component.scss'],
+  encapsulation: ViewEncapsulation.None
 })
 export class CalorieTableComponent implements OnInit, OnDestroy {
   // Data properties
@@ -65,54 +66,51 @@ export class CalorieTableComponent implements OnInit, OnDestroy {
   
   // For cleanup of subscriptions
   private destroy$ = new Subject<void>();
-
   constructor(private calorieService: CalorieTrackingService, private fb: FormBuilder) { 
-    // Initialize the edit form
+    // Initialize the edit form - only require the fields that the user can actually edit
     this.editForm = this.fb.group({
       date: ['', Validators.required],
       caloriesBurned: ['', [Validators.required, Validators.min(0)]],
-      caloriesConsumed: ['', [Validators.required, Validators.min(0)]],
-      dailyDifference: ['', Validators.required],
-      runningSum: ['', Validators.required],
-      remainingToGoal: ['', Validators.required],
-      status: ['']
+      caloriesConsumed: ['', [Validators.required, Validators.min(0)]]
+      // Remove the calculated fields from form validation since they're computed by the backend
     });
-  }
-
-  ngOnInit(): void {
-    // Load goal settings
-    this.calorieService.getGoalSettings()
+  }  ngOnInit(): void {
+    // Subscribe to goal settings updates
+    this.calorieService.goalSettings$
       .pipe(takeUntil(this.destroy$))
       .subscribe(settings => {
         this.goalSettings = settings;
       });
     
-    // Load daily logs
-    this.calorieService.getDailyLogs()
+    // Subscribe to daily logs updates (this will automatically update when new logs are added)
+    this.calorieService.dailyLogs$
       .pipe(takeUntil(this.destroy$))
       .subscribe(logs => {
         this.dailyLogs = logs;
       });
+    
+    // Explicitly trigger data loading on component initialization
+    // This ensures data is loaded even if the service constructor failed
+    this.loadData();
   }
   ngOnDestroy(): void {
     // Clean up subscriptions
     this.destroy$.next();
     this.destroy$.complete();
   }
-
   /**
    * Load or reload data from the service
    */
   loadData(): void {
     // Load goal settings
-    this.calorieService.getGoalSettings()
+    this.calorieService.fetchGoalSettings()
       .pipe(takeUntil(this.destroy$))
       .subscribe(settings => {
         this.goalSettings = settings;
       });
     
-    // Load daily logs
-    this.calorieService.getDailyLogs()
+    // Load daily logs - use fetchDailyLogs to get fresh data from API
+    this.calorieService.fetchDailyLogs()
       .pipe(takeUntil(this.destroy$))
       .subscribe(logs => {
         this.dailyLogs = logs;
@@ -509,9 +507,8 @@ export class CalorieTableComponent implements OnInit, OnDestroy {
     const day = ('0' + d.getDate()).slice(-2);
     return `${year}-${month}-${day}`;
   }
-
   // ==========  OVERALL STATUS METHODS FOR STATUS BOX ==========
-
+  
   /**
    * Get overall status class for the status box
    * @returns CSS class name for overall progress
@@ -521,10 +518,21 @@ export class CalorieTableComponent implements OnInit, OnDestroy {
       return 'no-data';
     }
     
-    const overall = this.calculateOverallPercentage();
-    return overall >= 80 ? 'on-track' : 'off-track';
+    const percentage = this.calculateOverallPercentage();
+    
+    // Handle negative percentages (when in surplus instead of deficit for deficit goals)
+    if (percentage < 0) {
+      return 'status-negative'; // New class for negative progress
+    } else if (percentage >= 100) {
+      return 'status-excellent';
+    } else if (percentage >= 80) {
+      return 'status-good';
+    } else if (percentage >= 50) {
+      return 'status-warning';
+    } else {
+      return 'status-behind';
+    }
   }
-
   /**
    * Get overall status message for the status box
    * @returns Status message for overall progress
@@ -537,28 +545,94 @@ export class CalorieTableComponent implements OnInit, OnDestroy {
     if (this.dailyLogs.length === 0) {
       return 'No entries yet';
     }
+      const percentage = this.calculateOverallPercentage();
+    const latestLog = this.dailyLogs.sort((a, b) => b.dayNumber - a.dayNumber)[0];
+    const currentTotal = latestLog.runningSum || 0;
     
-    const percentage = this.calculateOverallPercentage();
-    if (percentage >= 80) {
-      return 'On Track';
+    // Handle negative progress (surplus when goal is deficit)
+    if (percentage < 0) {
+      return 'Going Backwards!';
+    } else if (percentage >= 100) {
+      return 'Goal Achieved!';
+    } else if (percentage >= 80) {
+      return 'Almost There!';
+    } else if (percentage >= 50) {
+      return 'Good Progress';
+    } else if (percentage >= 25) {
+      return 'Keep Going!';
+    } else if (currentTotal === 0) {
+      return 'Get Started!';
     } else {
-      return 'Keep going!';
+      return 'Just Starting';
     }
   }
-
+  
   /**
    * Calculate overall goal percentage for the status box
-   * @returns Percentage as number between 0-100
+   * @returns Percentage as number (can be negative if below 0 progress)
    */
   calculateOverallPercentage(): number {
     if (!this.goalSettings || this.dailyLogs.length === 0) {
       return 0;
     }
     
-    // Calculate progress based on days logged vs time window
-    const daysLogged = this.dailyLogs.length;
-    const timeWindow = this.goalSettings.timeWindowDays || 1;
+    // Get the latest running sum (total calories achieved so far)
+    const latestLog = this.dailyLogs.sort((a, b) => b.dayNumber - a.dayNumber)[0];
+    const currentTotal = latestLog.runningSum || 0;
+    const goalTotal = Math.abs(this.goalSettings.totalCalorieGoal);
     
-    return Math.min(100, (daysLogged / timeWindow) * 100);
+    if (goalTotal === 0) {
+      return 0;
+    }
+    
+    // Calculate percentage of goal achieved
+    // For deficit goals: positive currentTotal = progress toward goal
+    // For deficit goals: negative currentTotal = negative progress (surplus instead of deficit)
+    if (this.goalSettings.totalCalorieGoal > 0) {
+      // Deficit goal - currentTotal should be positive for progress
+      const percentage = (currentTotal / goalTotal) * 100;
+      return Math.min(100, percentage); // Cap at 100% but allow negative values
+    } else {
+      // Surplus goal - currentTotal should be negative for progress
+      const percentage = (Math.abs(currentTotal) / goalTotal) * 100;
+      return Math.min(100, Math.max(0, percentage)); // For surplus goals, keep 0-100%
+    }
+  }
+  /**
+   * Get detailed progress information showing calories achieved vs target
+   * @returns Progress information string
+   */
+  getProgressDetails(): string {
+    if (!this.goalSettings || this.dailyLogs.length === 0) {
+      return 'No data available';
+    }
+    
+    const latestLog = this.dailyLogs.sort((a, b) => b.dayNumber - a.dayNumber)[0];
+    const currentTotal = latestLog.runningSum || 0; // Keep the actual value with sign
+    const goalTotal = Math.abs(this.goalSettings.totalCalorieGoal);
+    
+    if (this.goalSettings.totalCalorieGoal > 0) {
+      // Deficit goal - show with proper sign
+      const formattedCurrent = currentTotal >= 0 ? 
+        currentTotal.toLocaleString() : 
+        `-${Math.abs(currentTotal).toLocaleString()}`;
+      return `${formattedCurrent} of ${goalTotal.toLocaleString()} calorie deficit achieved`;
+    } else {
+      // Surplus goal - show absolute value since we want surplus to be positive
+      const formattedCurrent = Math.abs(currentTotal).toLocaleString();
+      return `${formattedCurrent} of ${goalTotal.toLocaleString()} calorie surplus achieved`;
+    }
+  }
+
+  /**
+   * Get days logged information
+   * @returns Days logged string
+   */
+  getDaysLoggedInfo(): string {
+    if (!this.goalSettings) {
+      return 'No goal set';
+    }
+    
+    return `${this.dailyLogs.length} of ${this.goalSettings.timeWindowDays || 0} days logged`;
   }
 }
