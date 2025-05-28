@@ -1,0 +1,95 @@
+<div class="daily-log-container">
+  <h2>Add Daily Log</h2>
+  
+  <div class="success-message" *ngIf="showSuccessMessage">
+    {{ successMessage }}
+  </div>
+  
+  <div class="error-message" *ngIf="showErrorMessage" data-testid="server-error-message">
+    {{ errorMessage }}
+  </div>
+  
+  <form [formGroup]="logForm" (ngSubmit)="onSubmit()">
+    <div class="form-group">
+      <label for="date">Date:</label>
+      <input 
+        type="date" 
+        id="date" 
+        formControlName="date"
+        [min]="formatDate(today)"
+        data-testid="log-date"
+        (keydown)="preventTyping($event)"
+        #dateField
+      >
+      <div class="form-hint">
+        Select the date for this calorie log entry
+      </div>
+      <div class="error-message" *ngIf="logForm.get('date')?.errors?.['required'] && logForm.get('date')?.touched">
+        Please select a valid date
+      </div>
+      <div class="error-message" *ngIf="logForm.get('date')?.errors?.['dateInPast'] && logForm.get('date')?.touched">
+        Date cannot be in the past
+      </div>
+      <div class="error-message" *ngIf="logForm.get('date')?.errors?.['dateInFuture'] && logForm.get('date')?.touched" data-testid="future-date-error">
+        Date cannot be in the future
+      </div>
+      <div class="error-message" *ngIf="logForm.get('date')?.errors?.['dateBeforeGoalStart'] && logForm.get('date')?.touched">
+        Date is before the goal start date
+      </div>
+      <div class="error-message" *ngIf="logForm.get('date')?.errors?.['dateAfterGoalEnd'] && logForm.get('date')?.touched" data-testid="date-range-error">
+        Date is outside your goal time window
+      </div>
+      <div class="error-message" *ngIf="logForm.get('date')?.errors?.['duplicateDate'] && logForm.get('date')?.touched" data-testid="date-error-message">
+        This date already exists
+      </div>
+      <div class="error-message" *ngIf="logForm.get('date')?.errors?.['invalidFormat'] && logForm.get('date')?.touched" data-testid="date-format-error">
+        Invalid date format
+      </div>
+    </div>
+    
+    <div class="form-group">
+      <label for="caloriesBurned">Calories Burned:</label>
+      <input 
+        type="number" 
+        id="caloriesBurned" 
+        formControlName="caloriesBurned"
+        placeholder="Enter calories burned"
+        min="0"
+        data-testid="calories-burned"
+      >
+      <div class="form-hint">
+        Include all calories burned through metabolism, exercise, and daily activities
+      </div>
+      <div class="error-message" *ngIf="logForm.get('caloriesBurned')?.invalid && logForm.get('caloriesBurned')?.touched" data-testid="burn-error">
+        Burn must be ≥ 0
+      </div>
+    </div>
+    
+    <div class="form-group">
+      <label for="caloriesConsumed">Calories Consumed:</label>
+      <input 
+        type="number" 
+        id="caloriesConsumed" 
+        formControlName="caloriesConsumed"
+        placeholder="Enter calories consumed"
+        min="0"
+        data-testid="calories-intake"
+      >
+      <div class="form-hint">
+        Enter the total calories consumed from all food and drinks
+      </div>
+      <div class="error-message" *ngIf="logForm.get('caloriesConsumed')?.invalid && logForm.get('caloriesConsumed')?.touched">
+        Please enter a valid number (positive whole number)
+      </div>
+    </div>
+    
+    <div class="button-group">
+      <button type="submit" [disabled]="logForm.invalid" data-testid="add-entry-btn">Add Entry</button>
+      <button type="button" (click)="resetForm()" data-testid="reset-form-btn">Reset</button>
+    </div>
+    
+    <div class="loading-indicator" *ngIf="loading" data-testid="loading-spinner">
+      Loading...
+    </div>
+  </form>
+</div>

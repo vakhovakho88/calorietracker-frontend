@@ -1,0 +1,200 @@
+<div class="goal-settings-container">
+  <h2>Goal Settings</h2>
+  
+  <!-- Undo banner with timer -->
+  <div class="undo-banner" *ngIf="showUndoBanner" role="alert" aria-live="polite">
+    <span>Goal updated successfully!</span>
+    <button 
+      (click)="undoLastChange()" 
+      class="undo-button" 
+      aria-label="Undo goal update"
+      [disabled]="isLoading">
+      Undo ({{undoTimeLeft}}s)
+    </button>
+  </div>
+  
+  <form [formGroup]="goalForm" (ngSubmit)="onSubmit()" aria-labelledby="goal-settings-heading">
+    <div class="form-group">
+      <label for="totalCalorieGoal" id="totalCalorieGoalLabel">Total Calorie Goal:</label>
+      <div class="input-wrapper" [class.invalid]="goalForm.get('totalCalorieGoal')?.invalid && goalForm.get('totalCalorieGoal')?.touched">
+        <input 
+          type="number" 
+          id="totalCalorieGoal" 
+          formControlName="totalCalorieGoal"
+          placeholder="Enter goal (positive = deficit, negative = surplus)"
+          data-testid="total-calorie-goal"
+          aria-labelledby="totalCalorieGoalLabel"
+          aria-describedby="totalCalorieGoalHint totalCalorieGoalError"
+          [attr.aria-invalid]="goalForm.get('totalCalorieGoal')?.invalid && goalForm.get('totalCalorieGoal')?.touched"
+        >
+        <div class="tooltip" *ngIf="goalForm.get('totalCalorieGoal')?.invalid && goalForm.get('totalCalorieGoal')?.touched">
+          <span *ngIf="goalForm.get('totalCalorieGoal')?.errors?.['required']">Total calorie goal is required</span>
+          <span *ngIf="goalForm.get('totalCalorieGoal')?.errors?.['nonZero']">Total calorie goal must not be 0</span>
+          <span *ngIf="goalForm.get('totalCalorieGoal')?.errors?.['pattern']">Please enter a valid number</span>
+          <span *ngIf="goalForm.get('totalCalorieGoal')?.errors?.['serverError']">{{goalForm.get('totalCalorieGoal')?.errors?.['serverError']}}</span>
+        </div>
+      </div>
+      <div class="form-hint" id="totalCalorieGoalHint">
+        Enter a positive number for a calorie deficit goal or a negative number for a calorie surplus goal
+      </div>
+      <div class="error-message" id="totalCalorieGoalError" *ngIf="goalForm.get('totalCalorieGoal')?.errors?.['nonZero'] && goalForm.get('totalCalorieGoal')?.touched" data-testid="calorie-error">
+        TargetKcals must be ≠ 0
+      </div>
+    </div>
+    
+    <div class="form-group">
+      <label for="startDate" id="startDateLabel">Start Date:</label>
+      <div class="input-wrapper" [class.invalid]="goalForm.get('startDate')?.invalid && goalForm.get('startDate')?.touched">
+        <input 
+          type="date" 
+          id="startDate" 
+          formControlName="startDate"
+          [min]="formatDate(today)"
+          [attr.min]="formatDate(today)"
+          data-testid="start-date"
+          aria-labelledby="startDateLabel"
+          aria-describedby="startDateHint startDateError"
+          [attr.aria-invalid]="goalForm.get('startDate')?.invalid && goalForm.get('startDate')?.touched"
+          (change)="onStartDateChange()"
+          (keydown)="preventTyping($event)"
+          #startDateField
+        >
+        <div class="tooltip" *ngIf="goalForm.get('startDate')?.invalid && goalForm.get('startDate')?.touched">
+          <span *ngIf="goalForm.get('startDate')?.errors?.['required']">Start date is required</span>
+          <span *ngIf="goalForm.get('startDate')?.errors?.['dateInPast']">Start date cannot be in the past</span>
+          <span *ngIf="goalForm.get('startDate')?.errors?.['serverError']">{{goalForm.get('startDate')?.errors?.['serverError']}}</span>
+        </div>
+      </div>
+      <div class="form-hint" id="startDateHint">
+        <strong>Important:</strong> Start date must be today or in the future
+      </div>
+      <div class="error-message" id="startDateError" *ngIf="goalForm.get('startDate')?.errors?.['dateInPast'] && goalForm.get('startDate')?.touched" data-testid="date-error">
+        Start date cannot be in the past
+      </div>
+    </div>
+    
+    <!-- Time window selection toggle -->
+    <div class="form-group time-window-toggle">
+      <label>Goal Duration:</label>
+      <div class="toggle-buttons">
+        <button 
+          type="button" 
+          [class.active]="!useEndDate" 
+          (click)="toggleTimeWindowMethod(false)" 
+          [attr.aria-pressed]="!useEndDate"
+          aria-label="Set duration in days"
+        >
+          Days
+        </button>
+        <button 
+          type="button" 
+          [class.active]="useEndDate" 
+          (click)="toggleTimeWindowMethod(true)"
+          [attr.aria-pressed]="useEndDate"
+          aria-label="Set end date"
+        >
+          End Date
+        </button>
+      </div>
+    </div>
+    
+    <!-- Time Window (days) - shown when useEndDate is false -->
+    <div class="form-group" *ngIf="!useEndDate">
+      <label for="timeWindowDays" id="timeWindowDaysLabel">Time Window (days):</label>
+      <div class="input-wrapper" [class.invalid]="goalForm.get('timeWindowDays')?.invalid && goalForm.get('timeWindowDays')?.touched">
+        <input 
+          type="number" 
+          id="timeWindowDays" 
+          formControlName="timeWindowDays"
+          placeholder="Enter number of days (1-3650)"
+          min="1"
+          max="3650"
+          data-testid="time-window"
+          aria-labelledby="timeWindowDaysLabel"
+          aria-describedby="timeWindowDaysHint timeWindowDaysError"
+          [attr.aria-invalid]="goalForm.get('timeWindowDays')?.invalid && goalForm.get('timeWindowDays')?.touched"
+          (change)="onTimeWindowDaysChange()"
+        >
+        <div class="tooltip" *ngIf="goalForm.get('timeWindowDays')?.invalid && goalForm.get('timeWindowDays')?.touched">
+          <span *ngIf="goalForm.get('timeWindowDays')?.errors?.['required']">Time window is required</span>
+          <span *ngIf="goalForm.get('timeWindowDays')?.errors?.['min']">Time window must be > 0</span>
+          <span *ngIf="goalForm.get('timeWindowDays')?.errors?.['max']">Time window must be ≤ 3,650 days</span>
+          <span *ngIf="goalForm.get('timeWindowDays')?.errors?.['pattern']">Please enter a valid whole number</span>
+          <span *ngIf="goalForm.get('timeWindowDays')?.errors?.['serverError']">{{goalForm.get('timeWindowDays')?.errors?.['serverError']}}</span>
+        </div>
+      </div>
+      <div class="form-hint" id="timeWindowDaysHint">
+        Enter the number of days you want to achieve your goal in (between 1 and 3,650 days)
+      </div>
+      <div class="error-message" id="timeWindowDaysError" *ngIf="goalForm.get('timeWindowDays')?.errors?.['max'] && goalForm.get('timeWindowDays')?.touched" data-testid="window-error">
+        Time Window must be between 1 and 3,650 days
+      </div>
+    </div>
+    
+    <!-- End Date - shown when useEndDate is true -->
+    <div class="form-group" *ngIf="useEndDate">
+      <label for="endDate" id="endDateLabel">End Date:</label>
+      <div class="input-wrapper" [class.invalid]="goalForm.get('endDate')?.invalid && goalForm.get('endDate')?.touched">
+        <input 
+          type="date" 
+          id="endDate" 
+          formControlName="endDate"
+          [min]="getMinEndDate()"
+          [attr.min]="getMinEndDate()"
+          data-testid="end-date"
+          aria-labelledby="endDateLabel"
+          aria-describedby="endDateHint endDateError"
+          [attr.aria-invalid]="goalForm.get('endDate')?.invalid && goalForm.get('endDate')?.touched"
+          (change)="onEndDateChange()"
+          (keydown)="preventTyping($event)"
+          #endDateField
+        >
+        <div class="tooltip" *ngIf="goalForm.get('endDate')?.invalid && goalForm.get('endDate')?.touched">
+          <span *ngIf="goalForm.get('endDate')?.errors?.['required']">End date is required</span>
+          <span *ngIf="goalForm.get('endDate')?.errors?.['endDateBeforeStart']">End date must be after start date</span>
+          <span *ngIf="goalForm.get('endDate')?.errors?.['maxDuration']">Goal duration cannot exceed 3,650 days</span>
+          <span *ngIf="goalForm.get('endDate')?.errors?.['serverError']">{{goalForm.get('endDate')?.errors?.['serverError']}}</span>
+        </div>
+      </div>
+      <div class="form-hint" id="endDateHint">
+        <strong>Important:</strong> End date must be after the start date and within 3,650 days
+      </div>
+      <div class="error-message" id="endDateError" *ngIf="goalForm.get('endDate')?.errors && goalForm.get('endDate')?.touched" data-testid="end-date-error">
+        <span *ngIf="goalForm.get('endDate')?.errors?.['endDateBeforeStart']">End date must be after start date</span>
+        <span *ngIf="goalForm.get('endDate')?.errors?.['maxDuration']">Goal duration cannot exceed 3,650 days</span>
+      </div>
+    </div>
+    
+    <div class="goal-summary" *ngIf="currentGoal" data-testid="goal-info-box" aria-live="polite">
+      <h3>Current Goal Information</h3>
+      <p>
+        <span class="goal-type">{{ currentGoal.totalCalorieGoal > 0 ? 'Deficit' : 'Surplus' }}</span> of 
+        <span class="goal-amount">{{ Math.abs(currentGoal.totalCalorieGoal).toLocaleString() }}</span> calories over 
+        <span class="goal-days">{{ currentGoal.timeWindowDays }}</span> days
+      </p>
+      <p data-testid="daily-target">
+        <strong>Daily Target:</strong> 
+        <span class="daily-target">{{ calculateDailyTarget() }}</span> 
+        {{ currentGoal.totalCalorieGoal > 0 ? 'kcal/day' : 'kcal surplus per day' }}
+      </p>
+      <div class="date-range">
+        <p>
+          <strong>Goal Period:</strong> 
+          <span class="date-range-text">{{ formatDisplayDate(currentGoal.startDate) }} - {{ formatDisplayDate(calculateEndDate(currentGoal.startDate, currentGoal.timeWindowDays)) }}</span>
+        </p>
+      </div>
+    </div>
+    
+    <button 
+      type="submit" 
+      [disabled]="goalForm.invalid || isLoading" 
+      data-testid="update-goal-btn"
+      aria-label="Update goal settings"
+      class="update-btn"
+    >
+      <span *ngIf="!isLoading">Update Goal</span>
+      <span *ngIf="isLoading" class="spinner" aria-hidden="true"></span>
+      <span *ngIf="isLoading" class="sr-only">Updating goal...</span>
+    </button>
+  </form>
+</div>

@@ -1,0 +1,216 @@
+<!-- Main display table for calorie entries -->
+<div class="calorie-table-container">
+  <h2>Daily Calorie Log</h2>
+  
+  <div class="table-actions">
+    <button (click)="confirmDeleteAll()" class="danger-btn" data-testid="delete-all-btn">Delete All Entries</button>
+  </div>
+
+  <div *ngIf="dailyLogs.length > 0; else noEntries">
+    <table class="calorie-table" data-testid="logs-table">
+      <thead>
+        <tr>
+          <th (click)="sortByDate()">
+            Date
+            <span *ngIf="isDateSortAscending">▲</span>
+            <span *ngIf="!isDateSortAscending">▼</span>
+          </th>
+          <th>Day #</th>
+          <th>Calories Burned</th>
+          <th>Calories Consumed</th>
+          <th>Difference</th>
+          <th>Sum Diffs</th>
+          <th>4-Day Avg</th>
+          <th>7-Day Avg</th>
+          <th>All-Time Avg</th>
+          <th>Goal Delta</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let log of dailyLogs" [ngClass]="getRowClass(log)" [attr.data-testid]="log.caloriesBurned < log.caloriesConsumed ? 'surplus-row' : ''" [class.surplus-day]="log.caloriesBurned < log.caloriesConsumed">
+          <td>{{ formatDate(log.date) }}</td>
+          <td>{{ log.dayNumber }}</td>
+          <td>{{ log.caloriesBurned }}</td>
+          <td>{{ log.caloriesConsumed }}</td>
+          <td [ngClass]="{'surplus': log.caloriesBurned < log.caloriesConsumed, 'deficit': log.caloriesBurned > log.caloriesConsumed}">
+            {{ log.caloriesBurned - log.caloriesConsumed }}
+            <span *ngIf="log.caloriesBurned < log.caloriesConsumed" class="status-icon">▼</span>
+            <span *ngIf="log.caloriesBurned > log.caloriesConsumed" class="status-icon">▲</span>
+          </td>
+          <td data-testid="sum-diffs">{{ log.runningSum }}</td>
+          <td data-testid="avg-4-days">{{ log.rollingAvg4Day }}</td>
+          <td data-testid="avg-7-days">{{ log.rollingAvg7Day }}</td>
+          <td data-testid="avg-all">{{ log.overallAverage }}</td>
+          <td data-testid="goal-delta">{{ log.remainingToGoal }}</td>
+          <td class="actions">
+            <button (click)="showEdit(log)" class="edit-btn" data-testid="edit-btn">Edit</button>
+            <button (click)="confirmDelete(log)" class="delete-btn" data-testid="delete-btn">Delete</button>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  
+  <ng-template #noEntries>
+    <div class="no-data">No entries yet. Add your first calorie log above.</div>
+  </ng-template>
+  <!-- Status Box -->
+  <div class="status-box" data-testid="status-box" [ngClass]="getOverallStatusClass()">
+    <h3>Goal Progress</h3>
+    <p data-testid="status-message">Status: {{ getOverallStatusMessage() }}</p>
+    <p>{{ dailyLogs.length }} of {{ goalSettings?.timeWindowDays || 0 }} days logged</p>
+    <p data-testid="goal-percentage">Progress: {{ calculateOverallPercentage() }}%</p>
+  </div>
+</div>
+
+<!-- Delete confirmation dialog -->
+<div class="modal-overlay" *ngIf="showDeleteConfirm">
+  <div class="modal-content">
+    <h3>Confirm Delete</h3>
+    <p>Are you sure you want to delete the entry for {{ logToDelete ? formatDate(logToDelete.date) : '' }}?</p>
+    <div class="modal-actions">
+      <button (click)="proceedWithDelete()" class="confirm-btn" data-testid="confirm-delete-btn">Yes, Delete</button>
+      <button (click)="cancelDelete()" class="cancel-btn">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- Delete All confirmation dialog -->
+<div class="modal-overlay" *ngIf="showDeleteAllConfirm">
+  <div class="modal-content">
+    <h3>Confirm Delete All</h3>
+    <p>Are you sure you want to delete ALL entries? This cannot be undone.</p>
+    <div class="modal-actions">
+      <button (click)="proceedWithDeleteAll()" class="confirm-btn" data-testid="confirm-delete-all-btn">Yes, Delete All</button>
+      <button (click)="cancelDeleteAll()" class="cancel-btn">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- Edit form dialog -->
+<div class="modal-overlay" *ngIf="showEditForm">
+  <div class="modal-content">
+    <h3>Edit Calorie Log</h3>
+    
+    <div *ngIf="showEditError" class="error-message" data-testid="duplicate-date-error">
+      {{ editErrorMessage }}
+    </div>
+    
+    <form [formGroup]="editForm" (ngSubmit)="saveEdit()">
+      <div class="form-group">
+        <label for="edit-date">Date:</label>
+        <input 
+          type="date" 
+          id="edit-date" 
+          formControlName="date"
+          [max]="formatDateForInput(today)"
+          data-testid="edit-date"
+        >
+        <div *ngIf="editForm.get('date')?.invalid && editForm.get('date')?.touched" class="validation-error">
+          Date is required
+        </div>
+      </div>
+      
+      <div class="form-group">
+        <label for="edit-burned">Calories Burned:</label>
+        <input 
+          type="number" 
+          id="edit-burned" 
+          formControlName="caloriesBurned"
+          min="0"
+          data-testid="edit-calories-burned"
+        >
+        <div *ngIf="editForm.get('caloriesBurned')?.invalid && editForm.get('caloriesBurned')?.touched" class="validation-error">
+          <span *ngIf="editForm.get('caloriesBurned')?.errors?.['required']">Calories burned is required</span>
+          <span *ngIf="editForm.get('caloriesBurned')?.errors?.['min']">Calories burned cannot be negative</span>
+          <span *ngIf="editForm.get('caloriesBurned')?.errors?.['pattern']">Calories burned must be a whole number</span>
+        </div>
+      </div>
+      
+      <div class="form-group">
+        <label for="edit-consumed">Calories Consumed:</label>
+        <input 
+          type="number" 
+          id="edit-consumed" 
+          formControlName="caloriesConsumed"
+          min="0"
+          data-testid="edit-calories-intake"
+        >
+        <div *ngIf="editForm.get('caloriesConsumed')?.invalid && editForm.get('caloriesConsumed')?.touched" class="validation-error">
+          <span *ngIf="editForm.get('caloriesConsumed')?.errors?.['required']">Calories consumed is required</span>
+          <span *ngIf="editForm.get('caloriesConsumed')?.errors?.['min']">Calories consumed cannot be negative</span>
+          <span *ngIf="editForm.get('caloriesConsumed')?.errors?.['pattern']">Calories consumed must be a whole number</span>
+        </div>
+      </div>
+      
+      <div class="modal-actions">
+        <button type="submit" class="confirm-btn" [disabled]="editForm.invalid" data-testid="save-edit-btn">Save Changes</button>
+        <button type="button" (click)="cancelEdit()" class="cancel-btn">Cancel</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Success message for Cypress tests -->
+<div *ngIf="showSuccessMessage" class="success-message" style="position: fixed; top: 20px; right: 20px; padding: 10px; background-color: #dff0d8; color: #3c763d; border-radius: 4px;">
+  Operation completed successfully
+</div>
+
+<!-- Add some styles for surplus/deficit indicators -->
+<style>
+  .surplus-day {
+    background-color: rgba(255, 200, 200, 0.3);
+  }
+  
+  .surplus {
+    color: #e74c3c;
+  }
+  
+  .deficit {
+    color: #2ecc71;
+  }
+  
+  .status-icon {
+    margin-left: 4px;
+    font-weight: bold;
+  }
+  
+  .validation-error {
+    color: #e74c3c;
+    font-size: 0.8rem;
+    margin-top: 4px;
+  }
+  
+  .error-message {
+    background-color: #f8d7da;
+    color: #721c24;
+    padding: 10px;
+    border-radius: 4px;
+    margin-bottom: 15px;
+  }
+  
+  .success-message {
+    background-color: #dff0d8;
+    color: #3c763d;
+    padding: 10px;
+    border-radius: 4px;
+    margin-bottom: 15px;
+  }
+  
+  .status-box {
+    margin-top: 20px;
+    padding: 15px;
+    border-radius: 4px;
+  }
+  
+  .green {
+    background-color: rgba(46, 204, 113, 0.2);
+    border: 1px solid #2ecc71;
+  }
+  
+  .red {
+    background-color: rgba(231, 76, 60, 0.2);
+    border: 1px solid #e74c3c;
+  }
+</style>
